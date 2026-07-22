@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 .env
 .DS_Store
+
+# Local DuckDB database and temporary files
+data/*.duckdb
+data/*.duckdb.wal
