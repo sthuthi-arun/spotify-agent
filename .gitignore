@@ -7,3 +7,11 @@ __pycache__/
 # Local DuckDB database and temporary files
 data/*.duckdb
 data/*.duckdb.wal
+
+
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+.DS_Store

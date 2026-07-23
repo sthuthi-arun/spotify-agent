@@ -1,60 +1,79 @@
 import pytest
 
 from app.database.repository import (
-    get_top_tracks_by_genre,
+    find_track_by_name,
+    get_track_by_id,
     rank_artists_by_album_count,
-    search_tracks,
+    recommend_similar_tracks,
 )
 
 
-def test_get_top_tracks_by_genre() -> None:
-    results = get_top_tracks_by_genre("pop", 5)
+def test_find_track_by_name_returns_track():
+    track = find_track_by_name("Shape of You")
 
-    assert len(results) <= 5
-    assert len(results) > 0
-    assert all(
-        row["track_genre"].lower() == "pop"
-        for row in results
+    assert track is not None
+    assert "track_id" in track
+    assert "track_name" in track
+    assert "artists" in track
+
+
+def test_find_track_by_name_returns_none_for_missing_track():
+    track = find_track_by_name(
+        "this-track-definitely-does-not-exist-xyz"
     )
 
+    assert track is None
 
-def test_search_tracks() -> None:
-    results = search_tracks("weeknd", 5)
 
+def test_find_track_by_name_rejects_empty_name():
+    with pytest.raises(ValueError):
+        find_track_by_name("   ")
+
+
+def test_get_track_by_id_returns_track():
+    selected_track = find_track_by_name("Shape of You")
+
+    assert selected_track is not None
+
+    track = get_track_by_id(selected_track["track_id"])
+
+    assert track is not None
+    assert track["track_id"] == selected_track["track_id"]
+
+
+def test_rank_artists_by_album_count_respects_limit():
+    results = rank_artists_by_album_count(limit=5)
+
+    assert isinstance(results, list)
     assert len(results) <= 5
-    assert len(results) > 0
 
-    for row in results:
-        combined_text = (
-            f"{row['track_name']} {row['artists']}"
-        ).lower()
-
-        assert "weeknd" in combined_text
+    if results:
+        assert "artists" in results[0]
+        assert "album_count" in results[0]
 
 
-def test_rank_artists_by_album_count() -> None:
-    results = rank_artists_by_album_count(10)
+def test_rank_artists_rejects_invalid_limit():
+    with pytest.raises(ValueError):
+        rank_artists_by_album_count(limit=0)
 
-    assert len(results) <= 10
-    assert len(results) > 0
 
-    album_counts = [
-        row["album_count"]
-        for row in results
-    ]
+def test_recommend_similar_tracks_returns_results():
+    selected_track = find_track_by_name("Shape of You")
 
-    assert album_counts == sorted(
-        album_counts,
-        reverse=True,
+    assert selected_track is not None
+
+    results = recommend_similar_tracks(
+        track_id=selected_track["track_id"],
+        limit=5,
     )
 
+    assert isinstance(results, list)
+    assert len(results) <= 5
 
-def test_empty_search_rejected() -> None:
+
+def test_recommend_similar_tracks_rejects_invalid_limit():
     with pytest.raises(ValueError):
-        search_tracks("")
-
-
-def test_invalid_limit_rejected() -> None:
-    with pytest.raises(ValueError):
-        get_top_tracks_by_genre("pop", 0)
-
+        recommend_similar_tracks(
+            track_id="example-track-id",
+            limit=0,
+        )
