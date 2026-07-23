@@ -124,7 +124,68 @@ def get_top_tracks_by_genre(
 
     return execute_query(sql, [genre, limit])
 
+def find_track_by_name(
+    track_name: str,
+) -> dict[str, Any] | None:
+    cleaned_name = track_name.strip()
 
+    if not cleaned_name:
+        raise ValueError("Track name cannot be empty")
+
+    sql = """
+        SELECT
+            track_id,
+            track_name,
+            artists,
+            album_name,
+            track_genre,
+            popularity,
+            duration_ms,
+            explicit
+        FROM raw_tracks
+        WHERE LOWER(track_name) = LOWER(?)
+        ORDER BY popularity DESC NULLS LAST
+        LIMIT 1
+    """
+
+    exact_results = execute_query(sql, [cleaned_name])
+
+    if exact_results:
+        return exact_results[0]
+
+    partial_sql = """
+        SELECT
+            track_id,
+            track_name,
+            artists,
+            album_name,
+            track_genre,
+            popularity,
+            duration_ms,
+            explicit
+        FROM raw_tracks
+        WHERE LOWER(track_name) LIKE LOWER(?)
+        ORDER BY
+            CASE
+                WHEN LOWER(track_name) LIKE LOWER(?) THEN 0
+                ELSE 1
+            END,
+            popularity DESC NULLS LAST
+        LIMIT 1
+    """
+
+    partial_results = execute_query(
+        partial_sql,
+        [
+            f"%{cleaned_name}%",
+            f"{cleaned_name}%",
+        ],
+    )
+
+    if not partial_results:
+        return None
+
+    return partial_results[0]
 
 def get_track_by_id(track_id: str) -> dict[str, Any] | None:
     sql = """
