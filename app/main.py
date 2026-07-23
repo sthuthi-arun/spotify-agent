@@ -3,6 +3,9 @@ from fastapi import FastAPI
 
 from app.api.routes.search import router as search_router
 from app.api.agent import router as agent_router
+from app.core.logging_config import configure_logging
+
+configure_logging()
 
 app = FastAPI(
     title="Spotify Recommendation API",

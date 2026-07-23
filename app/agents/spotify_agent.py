@@ -1,5 +1,9 @@
+import logging
 import re
 from typing import Any
+
+
+logger = logging.getLogger(__name__)
 
 from app.database.repository import (
     find_track_by_name,
@@ -190,6 +194,36 @@ def run_artist_analytics(
 ) -> list[dict[str, Any]]:
     return rank_artists_by_album_count(limit=limit)
 
+def remove_duplicate_tracks(
+    results: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    unique_results: list[dict[str, Any]] = []
+    seen_track_ids: set[str] = set()
+    seen_track_details: set[tuple[str, str]] = set()
+
+    for result in results:
+        track_id = str(result.get("track_id") or "").strip()
+        track_name = str(result.get("track_name") or "").strip().lower()
+        artists = str(result.get("artists") or "").strip().lower()
+
+        if track_id:
+            if track_id in seen_track_ids:
+                continue
+
+            seen_track_ids.add(track_id)
+
+        elif track_name:
+            fallback_key = (track_name, artists)
+
+            if fallback_key in seen_track_details:
+                continue
+
+            seen_track_details.add(fallback_key)
+
+        unique_results.append(result)
+
+    return unique_results
+
 
 def run_agent(
     query: str,
@@ -197,13 +231,34 @@ def run_agent(
 ) -> AgentResponse:
     cleaned_query = clean_query(query)
 
-    if not cleaned_query:
-        raise ValueError("Query cannot be empty")
+    if len(cleaned_query) < 2:
+        raise ValueError(
+            "Query must contain at least 2 characters"
+        )
+
+    if len(cleaned_query) > 500:
+        raise ValueError(
+            "Query cannot exceed 500 characters"
+        )
 
     if not 1 <= limit <= 20:
-        raise ValueError("Limit must be between 1 and 20")
+        raise ValueError(
+            "Limit must be between 1 and 20"
+        )
+
+    logger.info(
+        "Processing agent request query=%r limit=%s",
+        cleaned_query,
+        limit,
+    )
 
     plan = classify_intent(cleaned_query)
+
+    logger.info(
+        "Detected intent=%s search_query=%r",
+        plan.intent.value,
+        plan.search_query,
+    )
 
     if plan.intent == AgentIntent.RECOMMEND_TRACKS:
         results = run_recommendation(
@@ -226,10 +281,27 @@ def run_agent(
     else:
         results = []
 
+    cleaned_results = remove_duplicate_tracks(results)
+    cleaned_results = cleaned_results[:limit]
+
+    if not cleaned_results:
+        explanation = (
+            f"{plan.explanation} "
+            "No matching results were found."
+        )
+    else:
+        explanation = plan.explanation
+
+    logger.info(
+        "Agent request completed intent=%s result_count=%s",
+        plan.intent.value,
+        len(cleaned_results),
+    )
+
     return AgentResponse(
         query=cleaned_query,
         intent=plan.intent,
-        explanation=plan.explanation,
-        result_count=len(results),
-        results=results,
+        explanation=explanation,
+        result_count=len(cleaned_results),
+        results=cleaned_results,
     )
